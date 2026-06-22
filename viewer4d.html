@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lift4D — interactive 4D viewer</title>
+<style>
+  html,body{margin:0;height:100%;background:#0d0f12;color:#cdd3da;font-family:system-ui,sans-serif;overflow:hidden}
+  #app{position:fixed;inset:0}
+  canvas{width:100%;height:100%;display:block}
+  #ui{position:fixed;left:14px;top:12px;z-index:10;background:rgba(20,22,26,.86);padding:10px 12px;border-radius:10px;font-size:13px;backdrop-filter:blur(6px);min-width:230px}
+  #ui b{color:#fff}
+  #ui-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  #ui-min{margin:0;width:26px;height:26px;line-height:1;padding:0;text-align:center;font-size:16px;background:#262b33;border:1px solid #3a414c}
+  #ui-min:hover{background:#2f3640}
+  #ui.min{min-width:0}
+  #ui.min #ui-body{display:none}
+  #ui .grp{border-top:1px solid #2a2f37;margin-top:8px;padding-top:8px}
+  #ui .grp>.h{color:#9aa3ad;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+  #ui label.row{display:flex;align-items:center;gap:7px;margin:4px 0;cursor:pointer}
+  #ui label.row input{margin:0}
+  select,button{font:inherit;background:#1c2026;color:#cdd3da;border:1px solid #333;border-radius:6px;padding:5px 8px}
+  select{width:100%}
+  button{cursor:pointer;margin-top:6px}
+  input[type=range]{width:100%}
+  .sl{display:flex;align-items:center;gap:8px;margin:4px 0}
+  .sl span{color:#9aa3ad;font-size:11px;min-width:62px}
+  #stat{margin-top:8px;color:#7e8893;font-size:11px;white-space:pre-line}
+  #stat.loading{
+    font-size:13px;font-weight:700;letter-spacing:.3px;
+    background:linear-gradient(90deg,#6aa6f5,#46d6a6,#f0c24a,#e0708a,#6aa6f5);
+    background-size:200% auto;
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    animation:lift4dShimmer 1.3s linear infinite;
+  }
+  @keyframes lift4dShimmer{to{background-position:-200% center}}
+  /* phone-width (incl. the embedded gallery iframe on a phone): keep the control panel
+     compact and let it start minimized (see JS) so the 3D fills the small viewport */
+  @media (max-width: 600px) {
+    #ui { left: 8px; top: 8px; min-width: 0; max-width: calc(100vw - 16px); font-size: 12px; padding: 8px 9px; }
+    #ui .sl span { min-width: 52px; }
+  }
+</style>
+</head>
+<body>
+<div id="app"><canvas id="c"></canvas></div>
+<div id="ui">
+  <div id="ui-head">
+    <b>4D Viewer</b>
+    <button id="ui-min" title="Minimize panel" aria-label="Minimize panel">–</button>
+  </div>
+
+  <div id="ui-body">
+    <div class="grp">
+      <div class="h" id="scene_hdr">Scene</div>
+      <select id="scene"></select>
+      <div class="sl"><span>Timestep</span><input type="range" id="frame" min="0" max="0" value="0"><span id="fnum" style="min-width:24px">0</span></div>
+      <div style="text-align:center;margin:7px 0"><button id="playpause" title="Pause / Play" style="font-size:15px;width:46px;height:32px;line-height:1;border-radius:8px">⏸</button></div>
+      <div class="sl"><span>FPS</span><input type="range" id="fps" min="1" max="30" step="1" value="15"><span id="fpsn" style="min-width:24px">15</span></div>
+    </div>
+
+    <div class="grp">
+      <div class="h">Options</div>
+      <label class="row"><input type="checkbox" id="show_bg" checked> Background</label>
+      <label class="row"><input type="checkbox" id="bg_accum" checked> Accumulate background over time</label>
+      <label class="row"><input type="checkbox" id="show_cam" checked> Frustum</label>
+      <label class="row"><input type="checkbox" id="show_ours" checked> Lift4D Output</label>
+      <label class="row"><input type="checkbox" id="show_traj" checked> Trajectories over time</label>
+      <label class="row"><input type="checkbox" id="show_hl" checked> Object highlight</label>
+    </div>
+
+    <div id="stat"></div>
+  </div>
+</div>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import { GS4DPlayer } from './static/js/gs4d_player.js';
+
+const SCENES = ['libby', 'camel', 'rhino', 'horsejump-low', 'blackswan', 'bear',
+                'parkour', 'dog', 'dog-agility', 'ball', 'bicycle', 'bird',
+                'goat', 'robot', 'yarn', 'book', 'cloth',
+                'bulldozers_truck'];
+
+// Config from the query string so the page can be embedded (e.g. in the gallery
+// iframe) and the heavy params can be served from a separate host:
+//   ?params=<base>  per-scene params live at <base>/<scene>/        (default ./static/params/)
+//   ?scene=<name>   initial scene                                    (default first SCENE)
+//   ?embed=1        hide the in-viewer Scene dropdown (parent drives scene selection)
+const QS = new URLSearchParams(location.search);
+const PARAMS_BASE = (() => { let p = QS.get('params') || './static/params/'; return p.endsWith('/') ? p : p + '/'; })();
+const EMBED = QS.has('embed');
+const INIT_SCENE = (() => {
+  const s = QS.get('scene') || (location.hash ? decodeURIComponent(location.hash.slice(1)) : '');
+  return SCENES.includes(s) ? s : SCENES[0];
+})();
+
+const $ = (id) => document.getElementById(id);
+const sel = $('scene');
+SCENES.forEach(s => { const o = document.createElement('option'); o.value = o.textContent = s; sel.appendChild(o); });
+if (EMBED) { sel.style.display = 'none'; const h = $('scene_hdr'); if (h) h.style.display = 'none'; }
+
+// Minimize / restore the control panel (collapses to just the title bar).
+const uiMin = $('ui-min');
+uiMin.onclick = () => {
+  const min = $('ui').classList.toggle('min');
+  uiMin.textContent = min ? '+' : '–';
+  const lbl = min ? 'Expand panel' : 'Minimize panel';
+  uiMin.title = lbl;
+  uiMin.setAttribute('aria-label', lbl);
+};
+// On phone-width viewports (e.g. the gallery iframe on a phone) start minimized so the
+// 3D fills the small viewport; the user can tap to expand. Desktop widths are unaffected.
+if (window.innerWidth <= 600) {
+  $('ui').classList.add('min');
+  uiMin.textContent = '+'; uiMin.title = 'Expand panel'; uiMin.setAttribute('aria-label', 'Expand panel');
+}
+
+const canvas = $('c'), stat = $('stat'), slider = $('frame'), fnum = $('fnum');
+let player = null;
+let _loadSeq = 0;   // guards against overlapping scene loads resolving out of order
+
+const playBtn = $('playpause');
+function syncPlay(){ playBtn.textContent = (player && player.playing) ? '⏸' : '▶'; }
+playBtn.onclick = () => { if (!player) return; player.playing = !player.playing; syncPlay(); };
+
+function bindControls() {
+  $('fps').oninput      = e => { player.fps = +e.target.value; $('fpsn').textContent = e.target.value;
+                                 try { window.parent.postMessage({ type: 'lift4d-fps', fps: player.fps }, '*'); } catch (_) {} };
+  slider.oninput        = e => { player.playing = false; player._frame = +e.target.value; syncPlay(); };
+  $('show_bg').onchange   = e => { player.showBg   = e.target.checked; };
+  $('bg_accum').onchange  = e => { player.bgAccum  = e.target.checked; };
+  $('show_cam').onchange  = e => { player.showCam  = e.target.checked; };
+  $('show_ours').onchange = e => { player.showOurs = e.target.checked; };
+  $('show_traj').onchange = e => { player.showTraj = e.target.checked; };
+  $('show_hl').onchange    = e => { player.showHighlight = e.target.checked; };
+}
+
+// "loading <name>…" with a color wave: a moving gradient clipped to the text
+// (see #stat.loading) sweeps the colors across the letters in a synchronized way.
+function setLoading(name) {
+  stat.classList.add('loading');
+  stat.textContent = 'loading ' + name + '…';
+}
+
+async function loadScene(name) {
+  if (!SCENES.includes(name)) return;
+  const myseq = ++_loadSeq;            // newest request wins
+  const prev = player;                 // kept visible (frozen) until the new scene is ready
+  if (prev) { prev.playing = false; syncPlay(); }   // pause the current scene's playback while the new one loads
+  sel.value = name;
+  setLoading(name);
+  const t0 = performance.now();
+  try {
+    const p = await new GS4DPlayer(canvas, PARAMS_BASE + name + '/', { fps: 15 }).load();
+    if (myseq !== _loadSeq) { p.dispose(); return; }   // superseded by a newer click — discard this load
+    if (prev) prev.dispose();          // free the old render loop now that the new scene is loaded
+    player = p;
+    player.start();
+    player.fps = +$('fps').value;
+    player.showBg = $('show_bg').checked; player.bgAccum = $('bg_accum').checked;
+    player.showCam = $('show_cam').checked; player.showOurs = $('show_ours').checked;
+    player.showTraj = $('show_traj').checked; player.showHighlight = $('show_hl').checked;
+    player.playing = true; syncPlay();   // always start playing, even on scene switch
+    slider.max = player.F - 1;
+    bindControls();
+    stat.classList.remove('loading');   // stop the animated loading text
+    const mb = (player.bgXyz ? player.bgXyz.length*4 + player.bgRgb.length : 0);
+    stat.textContent = `${name}\n${player.N.toLocaleString()} splats · ${player.F} frames`
+      + `\n${player.bgXyz ? (player.bgXyz.length/3).toLocaleString()+' bg pts' : 'no bg'}`
+      + `\nload ${(performance.now()-t0|0)} ms`;
+    notifyParent(name);   // let an embedding page highlight the active thumbnail
+  } catch (e) { if (myseq === _loadSeq) { stat.classList.remove('loading'); stat.textContent = 'ERROR: ' + e.message; } console.error(e); }
+}
+
+function notifyParent(name) {
+  if (window.parent === window) return;
+  try { window.parent.postMessage({ type: 'lift4d-scene-loaded', scene: name, F: player.F, fps: player.fps }, '*'); } catch (e) {}
+}
+
+// Let an embedding page (the gallery thumbnails) drive scene selection.
+window.addEventListener('message', (e) => {
+  const d = e.data;
+  if (d && d.type === 'lift4d-scene' && typeof d.scene === 'string') loadScene(d.scene);
+});
+
+sel.onchange = () => loadScene(sel.value);
+setInterval(() => { if (player) { slider.value = player._frame; fnum.textContent = player._frame; syncPlay(); } }, 100);
+loadScene(INIT_SCENE);
+</script>
+</body>
+</html>

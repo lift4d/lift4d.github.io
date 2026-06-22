@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="description"
+        content="Lift4D: Harmonizing Single-View 3D Estimation for 4D Reconstruction In-the-Wild.">
+  <meta name="keywords" content="Lift4D, 4D Reconstruction, Gaussian Splatting, SAM3D, Dynamic Scenes, Monocular Video">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lift4D: Harmonizing Single-View 3D Estimation for 4D Reconstruction In-the-Wild</title>
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
+        rel="stylesheet">
+
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <link rel="stylesheet"
+        href="https://use.fontawesome.com/releases/v5.15.4/css/all.css">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./static/css/index.css">
+</head>
+<body>
+
+<!-- ===================== TITLE + AUTHORS ===================== -->
+<section class="hero">
+  <div class="hero-body">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h1 class="title is-1 publication-title"
+              style="font-size: clamp(1.5rem, 4.2vw, 2.4rem); line-height: 1.2;">
+            <span style="white-space: nowrap;"><span class="lift4d">Lift4D</span>: Harmonizing Single-View 3D Estimation</span><br>
+            <span style="white-space: nowrap;">for 4D Reconstruction In-the-Wild</span>
+          </h1>
+
+
+          <div class="column has-text-centered">
+            <div class="publication-links">
+              <!-- arXiv Link. -->
+              <span class="link-block">
+                <a href="https://arxiv.org/abs/TODO"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="ai ai-arxiv"></i>
+                  </span>
+                  <span>arXiv</span>
+                </a>
+              </span>
+              <!-- Code Link. -->
+              <span class="link-block">
+                <a href="https://github.com/yehonathanlitman/Lift4D"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fab fa-github"></i>
+                  </span>
+                  <span>Code</span>
+                </a>
+              </span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== TEASER ===================== -->
+<section class="hero teaser">
+  <div class="container is-max-desktop" style="max-width: 1040px;">
+    <div class="hero-body">
+      <!-- Teaser: rhino orbit (wide), then a 2x3 grid; loops back to the rhino. -->
+      <video id="teaser-wide" autoplay muted loop playsinline preload="auto" fetchpriority="high"
+             style="display:block; width:100%; max-width:860px; margin:0 auto;
+                    border-radius:12px; box-shadow:0 6px 30px rgba(50,75,130,0.18);
+                    background:#0d1219;">
+        <source src="./static/videos/teaser_wide.mp4" type="video/mp4">
+      </video>
+      <h2 class="subtitle has-text-centered" style="margin-top: 1rem;">
+        <span class="lift4d">Lift4D</span> reconstructs the full geometry, appearance, and
+        deformation of dynamic objects in a scene, including regions never observed by the camera,
+        from a single monocular in-the-wild video.
+      </h2>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== ABSTRACT ===================== -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            Reconstructing complete dynamic objects from monocular video requires integrating
+            visual cues from direct observations with data-driven priors over geometry and
+            appearance. Prior approaches either learn to directly predict per-frame 3D
+            representations from visual input or initialize a 3D representation that is
+            subsequently deformed and refined based on video evidence. However, the former are
+            constrained by the scarcity of 4D training data, while the latter leverage priors
+            only for the initial reconstruction and rely solely on video supervision thereafter;
+            neither handles complex in-the-wild scenarios with large deformations and occlusions
+            well.
+          </p>
+          <p>
+            We present <span class="lift4d">Lift4D</span>, a test-time optimization framework
+            that addresses both limitations. First, we adapt an existing single-view 3D
+            reconstruction model to yield temporally consistent per-frame predictions via
+            causal latent conditioning, providing a coherent initialization for a deformable
+            3D Gaussian Splatting representation. We then &ldquo;sculpt&rdquo; this
+            representation to match the input video through an occlusion-aware optimization
+            that faithfully recovers visible surface details while completing unobserved
+            regions using a view-conditioned diffusion prior. We demonstrate that
+            <span class="lift4d">Lift4D</span> clearly improves over prior 4D reconstruction
+            methods, particularly on challenging in-the-wild sequences with severe occlusions
+            and non-rigid motion.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== RECONSTRUCTING COMPLETE 4D IN-THE-WILD ===================== -->
+<section class="section contribution-section" id="reconstructions">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 contribution-title has-text-centered">
+      Reconstructing Complete 4D In-the-Wild
+    </h2>
+    <p class="content has-text-centered" style="margin-bottom: 1rem;">
+      Pick a scene below to explore its complete 4D reconstruction in the interactive viewer. Click and drag to orbit; scroll to zoom.
+    </p>
+
+    <div class="lift4d-gallery-stage" style="position: relative; width: 100%; padding-bottom: 62%; background: #000; border-radius: 12px; overflow: hidden;">
+      <iframe id="lift4d-gallery-iframe"
+              title="Lift4D interactive 4D viewer"
+              allow="fullscreen"
+              style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0;">
+      </iframe>
+      <!-- Small input-video overlay (the raw object footage for the selected scene),
+           pinned bottom-left over the interactive viewer. Source set per-scene by JS. -->
+      <video id="lift4d-gallery-video" data-no-defer muted loop autoplay playsinline preload="metadata"
+             style="position:absolute; left:12px; bottom:12px; width:24%; max-width:230px; height:auto;
+                    border:1px solid rgba(255,255,255,.3); border-radius:8px; background:#000; z-index:3;
+                    box-shadow:0 3px 14px rgba(0,0,0,.45);"></video>
+    </div>
+    <script>
+      // The interactive viewer is a self-contained client-side WebGL splat player
+      // (viewer4d.html + static/js/gs4d_player.js): it loads each scene's compact
+      // params ONCE and skins/renders entirely in-browser — no backend needed, so it
+      // works on the static deploy. The heavy per-scene params can be served from a
+      // separate host (e.g. the lift_4d_viz repo's GitHub Pages) by pointing
+      // LIFT4D_PARAMS_BASE at <that-host>/params; "" uses the viewer's own
+      // ./static/params/ (same origin).
+      (function () {
+        // Local dev (localhost) loads params from ./static/params/ for speed; the
+        // deployed site pulls them from the lift_4d_viz GitHub Pages host so the main
+        // repo stays lean. github.io is same-origin as the main site (no CORS).
+        var onLocal = ["localhost", "127.0.0.1", ""].indexOf(location.hostname) >= 0;
+        var LIFT4D_PARAMS_BASE = onLocal ? "" : "https://yehonathanlitman.github.io/lift_4d_viz/params";
+        var DEFAULT_SCENE = "horsejump-low";
+        var src = "./viewer4d.html?embed=1&v=3&scene=" + encodeURIComponent(DEFAULT_SCENE);
+        if (LIFT4D_PARAMS_BASE) src += "&params=" + encodeURIComponent(LIFT4D_PARAMS_BASE);
+        // Don't load the viewer (iframe + scene params) yet — stash the URL and let the
+        // teaser-first loader at the end of <body> start it once the teaser is buffered.
+        window.__lift4dGallerySrc = src;
+        window.__lift4dDefaultScene = DEFAULT_SCENE;
+      })();
+    </script>
+
+    <div class="lift4d-gallery-selector has-text-centered" style="margin-top: 1rem;">
+      <div class="lift4d-scene-grid" id="lift4d-scene-grid"
+           style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.5rem; max-width: 920px; margin: 0 auto;"></div>
+      <p class="help" style="margin-top: 0.5rem;">
+        Click a thumbnail to switch the scene. Please be patient as some scenes are large.
+      </p>
+    </div>
+    <style>
+      .lift4d-scene-btn {
+        padding: 0; border: 2px solid transparent; background: none;
+        cursor: pointer; border-radius: 6px; overflow: hidden;
+        width: 100%;
+      }
+      .lift4d-scene-btn img {
+        display: block; width: 100%; height: 80px; object-fit: cover;
+      }
+      /* per-scene crop nudges (object-position Y: higher % = show lower part) */
+      .lift4d-scene-btn[data-scene="ball"] img { object-position: center 68%; }
+      .lift4d-scene-btn[data-scene="goat"] img { object-position: center 32%; }
+      .lift4d-scene-btn[data-scene="yarn"] img { object-position: center 63%; }
+      .lift4d-scene-btn[data-scene="bicycle"] img { object-position: center 63%; }
+      .lift4d-scene-btn:hover { border-color: #3273dc !important; }
+      .lift4d-scene-btn:focus { outline: 2px solid #3273dc; outline-offset: 2px; }
+      .lift4d-scene-btn.is-active { border-color: #3273dc !important; box-shadow: 0 0 0 2px rgba(50,115,220,0.5); }
+    </style>
+    <script>
+      // 3×6 grid: DAVIS and ITW scenes interleaved column-by-column so each
+      // row carries a mix of both datasets.
+      (function () {
+        const DAVIS = [
+          "horsejump-low", "libby", "rhino", "camel", "blackswan", "bear",
+          "parkour", "dog", "dog-agility",
+        ];                                          // 9 DAVIS (horsejump-low default)
+        const ITW = [
+          "ball", "bicycle", "bird", "book", "goat",
+          "robot", "yarn",
+        ];                                          // 7 ITW
+        // Extra in-the-wild video captures (some with multiple objects).
+        const VIDEOS = [
+          "cloth", "bulldozers_truck",
+        ];
+        // Interleave DAVIS/ITW (handles unequal lengths), then append the video captures.
+        const ORDER = [];
+        const nmax = Math.max(DAVIS.length, ITW.length);
+        for (let i = 0; i < nmax; i++) { if (i < DAVIS.length) ORDER.push(DAVIS[i]); if (i < ITW.length) ORDER.push(ITW[i]); }
+        VIDEOS.forEach(n => ORDER.push(n));
+        // swap pairs of grid positions (by scene name, applied in order)
+        [["bird", "bulldozers_truck"], ["bicycle", "yarn"], ["ball", "parkour"],
+         ["dog-agility", "bird"]].forEach(([x, y]) => {
+          const a = ORDER.indexOf(x), b = ORDER.indexOf(y);
+          if (a >= 0 && b >= 0) { const t = ORDER[a]; ORDER[a] = ORDER[b]; ORDER[b] = t; }
+        });
+        const TAG = {};
+        DAVIS.forEach(n => TAG[n] = "DAVIS");
+        ITW.forEach(n => TAG[n] = "ITW");
+        VIDEOS.forEach(n => TAG[n] = "video");
+        function mkBtn(name) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "lift4d-scene-btn";
+          b.dataset.scene = name;
+          b.title = `${name} (${TAG[name]})`;
+          b.onclick = (e) => { e.preventDefault(); lift4dPickScene(name); };
+          const img = document.createElement("img");
+          img.src = "./static/thumbnails/" + name + ".jpg";
+          img.alt = name;
+          b.appendChild(img);
+          return b;
+        }
+        const grid = document.getElementById("lift4d-scene-grid");
+        ORDER.forEach(n => grid.appendChild(mkBtn(n)));
+      })();
+    </script>
+  </div>
+
+  <script>
+    // Clicking a thumbnail tells the embedded client-side viewer (the iframe) to
+    // switch scenes via postMessage — no backend. The viewer posts back a
+    // "lift4d-scene-loaded" message once the scene is up, which highlights the
+    // active thumbnail (also covers the viewer's own initial default scene).
+    // A small input-video overlay (bottom-left) mirrors the selected scene's raw
+    // footage (./static/videos/<scene>_input.mp4). It's started after the teaser via
+    // __lift4dStartGallery (teaser-first loading) and kept in sync on scene switch.
+    var lift4dScene = window.__lift4dDefaultScene || 'horsejump-low';
+    var lift4dGalleryStarted = false;
+    // Portrait input clips are tall; shrink the corner overlay per scene so it doesn't
+    // overlap the viewer's control panel. Scale is relative to the default 24% / 230px.
+    var LIFT4D_CORNER_SCALE = { yarn: 0.495, goat: 0.495, bicycle: 0.495, ball: 0.495, bird: 0.5 };
+    function lift4dVideoSrc(name) { return './static/videos/' + name + '_inset.mp4'; }
+
+    // The reconstruction (viewer) loops over F frames at `fps`, so its period is F/fps.
+    // Match the corner input clip's loop to that period so they play in sync.
+    var lift4dReconF = 0, lift4dReconFps = 0;
+    function lift4dSyncCorner() {
+      var vid = document.getElementById('lift4d-gallery-video');
+      if (vid && lift4dReconF > 0 && lift4dReconFps > 0 && vid.duration > 0) {
+        var r = vid.duration / (lift4dReconF / lift4dReconFps);
+        vid.playbackRate = Math.max(0.0625, Math.min(16, r));
+      }
+    }
+    function lift4dSetCorner(name) {
+      var vid = document.getElementById('lift4d-gallery-video');
+      if (!vid) return;
+      var sc = LIFT4D_CORNER_SCALE[name] || 1;
+      vid.style.width = (24 * sc).toFixed(2) + '%';
+      vid.style.maxWidth = Math.round(230 * sc) + 'px';
+      var want = lift4dVideoSrc(name);
+      if (vid.getAttribute('src') !== want) { vid.src = want; vid.load(); }
+      vid.onloadedmetadata = lift4dSyncCorner;
+      lift4dSyncCorner();                              // in case metadata is already available
+      vid.play().catch(function () {});
+    }
+    // Called by the teaser-first loader once the teaser is playing.
+    window.__lift4dStartGallery = function () { lift4dGalleryStarted = true; };
+
+    function lift4dPickScene(name) {
+      lift4dScene = name;
+      var frame = document.getElementById('lift4d-gallery-iframe');
+      if (frame && frame.contentWindow) {
+        frame.contentWindow.postMessage({ type: 'lift4d-scene', scene: name }, '*');
+      }
+      // Pause the current corner clip while the new scene loads; the new clip is
+      // switched in and played only once the viewer reports the scene is loaded (below).
+      var vid = document.getElementById('lift4d-gallery-video');
+      if (vid) vid.pause();
+      lift4dSetActiveThumb(name);
+    }
+    function lift4dSetActiveThumb(name) {
+      document.querySelectorAll('.lift4d-scene-btn').forEach(function (b) {
+        b.classList.toggle('is-active', b.dataset.scene === name);
+      });
+    }
+    window.addEventListener('message', function (e) {
+      const d = e.data;
+      if (d && d.type === 'lift4d-scene-loaded' && d.scene) {
+        if (d.F) lift4dReconF = d.F;
+        if (d.fps) lift4dReconFps = d.fps;
+        lift4dSetActiveThumb(d.scene);
+        lift4dSetCorner(d.scene);   // switch the corner clip only once the scene has loaded
+      } else if (d && d.type === 'lift4d-fps' && d.fps) {
+        lift4dReconFps = d.fps;     // viewer FPS changed -> re-match the corner clip
+        lift4dSyncCorner();
+      }
+    });
+  </script>
+</section>
+
+<!-- ===================== METHOD OVERVIEW FIGURE ===================== -->
+<section class="section" style="padding-top: 0;">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-full">
+        <h2 class="title is-3">Methodology</h2>
+
+        <!-- Methodology: 3-column figure (reconstruction | input/result | appearance). -->
+        <div class="lift4d-method3" aria-label="Lift4D methodology figure">
+          <div class="m3g">
+            <!-- input video (middle) branches into the deformation (left) and appearance (right) reconstructions -->
+            <svg class="m3-branch" viewBox="0 0 1040 706" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+              <line x1="369" y1="96" x2="353" y2="96" stroke="#3b6fd6" stroke-width="3" vector-effect="non-scaling-stroke"/>
+              <polygon points="339,96 356,88 356,104" fill="#3b6fd6"/>
+              <line x1="671" y1="96" x2="687" y2="96" stroke="#7a5cff" stroke-width="3" vector-effect="non-scaling-stroke"/>
+              <polygon points="701,96 684,88 684,104" fill="#7a5cff"/>
+            </svg>
+            <div class="m3c m3c-side">
+              <div class="m3-title">Single-view Reconstruction Prior</div>
+              <div class="m3-denoise">
+                <div class="dn-vid">
+                  <video id="seqvid" class="seqvid" autoplay muted loop playsinline><source src="./static/videos/causal_seq.mp4" type="video/mp4"></video>
+                  <svg class="seqov" viewBox="0 0 140 456" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g id="sq-a1" style="opacity:0"><line x1="70" y1="148" x2="70" y2="157" stroke="#df6418" stroke-width="4.5" stroke-linecap="round"/><path d="M63.5,156 L70,164 L76.5,156 Z" fill="#df6418"/><image x="80" y="149" width="24" height="17" preserveAspectRatio="xMidYMid meet" href="./static/methodology/seq_noise.png" xlink:href="./static/methodology/seq_noise.png"/></g><g id="sq-a2" style="opacity:0"><line x1="70" y1="306" x2="70" y2="315" stroke="#df6418" stroke-width="4.5" stroke-linecap="round"/><path d="M63.5,314 L70,322 L76.5,314 Z" fill="#df6418"/><image x="80" y="307" width="24" height="17" preserveAspectRatio="xMidYMid meet" href="./static/methodology/seq_noise.png" xlink:href="./static/methodology/seq_noise.png"/></g></svg>
+                </div>
+                <div class="dn-eqs">
+                  <div class="dn-step r0"><div class="dn-step-hd">Image-to-3D DiT<svg class="dn-spin" viewBox="0 0 24 24" fill="none" stroke="#2f5bb0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></div><div class="dn-step-eq"><img id="eq-z00" class="dn-eq" src="./static/methodology/eq_z00.png" alt=""><img id="eq-z01" class="dn-eq" src="./static/methodology/eq_z01.png" alt=""></div></div>
+                  <div class="dn-step r1" id="dn-b1" style="opacity:0"><div class="dn-step-hd">Image-to-3D DiT<svg class="dn-spin" viewBox="0 0 24 24" fill="none" stroke="#2f5bb0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></div><div class="dn-step-eq"><img id="eq-z1mix" class="dn-eq" src="./static/methodology/eq_z1mix.png" alt=""><img id="eq-z11" class="dn-eq" src="./static/methodology/eq_z11.png" alt=""></div></div>
+                  <div class="dn-step r2" id="dn-b2" style="opacity:0"><div class="dn-step-hd">Image-to-3D DiT<svg class="dn-spin" viewBox="0 0 24 24" fill="none" stroke="#2f5bb0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></div><div class="dn-step-eq"><img id="eq-z2mix" class="dn-eq" src="./static/methodology/eq_z2mix.png" alt=""><img id="eq-z21" class="dn-eq" src="./static/methodology/eq_z21.png" alt=""></div></div>
+                </div>
+              </div>
+              <div class="m3-cap2">Causal Latent Propagation</div>
+              <div class="m3-down">&darr;</div>
+              <figure class="m3-gsdec2"><svg viewBox="0 0 150 46" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="3" width="146" height="40" rx="9" fill="#eef3fd" stroke="#3b6fd6" stroke-width="1.5"/><text x="75" y="20" font-size="12.5" font-weight="700" text-anchor="middle" fill="#2f5bb0">Gaussian Splat</text><text x="75" y="35" font-size="12.5" font-weight="700" text-anchor="middle" fill="#2f5bb0">Decoder</text></svg></figure>
+              <div class="m3-down">&darr;</div>
+              <video class="m3-vid" autoplay muted loop playsinline><source src="./static/videos/rhino_sam3d_orbit.mp4" type="video/mp4"></video>
+              <div class="m3-cap2" style="font-style:italic">Per-frame 3D Reconstruction</div>
+            </div>
+            <div class="m3c m3c-main">
+              <div class="m3-main-top">
+                <video class="m3-vid" autoplay muted loop playsinline><source src="./static/videos/rhino_input.mp4" type="video/mp4"></video>
+                <div class="m3-cap2">Input video</div>
+              </div>
+              <div class="m3-main-gap" style="flex:0.8 1 0"></div>
+              <div class="m3-main-bot">
+                <video class="m3-vid" style="border:2px solid #3b6fd6" autoplay muted loop playsinline><source src="./static/videos/rhino_complete.mp4" type="video/mp4"></video>
+                <div class="m3-cap2">Complete 4D Reconstruction</div>
+                <svg class="m3-upacc" viewBox="0 0 24 44" xmlns="http://www.w3.org/2000/svg" aria-label="block composes the complete reconstruction">
+                  <line x1="12" y1="42" x2="12" y2="13" stroke="#3b6fd6" stroke-width="3.2" stroke-linecap="round"/>
+                  <polygon points="12,2 4,17 20,17" fill="#3b6fd6"/>
+                </svg>
+                <div class="m3-fineblock">
+                <video class="m3-vid" autoplay muted loop playsinline><source src="./static/videos/rhino_canonical.mp4" type="video/mp4"></video>
+                <div class="m3-cap2">Canonical Gaussians</div>
+                <div class="m3-subrow">
+                  <video class="m3-vid" autoplay muted loop playsinline><source src="./static/videos/rhino_nodes.mp4" type="video/mp4"></video>
+                  <div class="m3-plus">+</div>
+                  <video class="m3-vid" autoplay muted loop playsinline><source src="./static/videos/rhino_delta.mp4" type="video/mp4"></video>
+                  <div class="m3-cap2" style="font-size:0.58rem; white-space:nowrap;">Deformation Nodes</div>
+                  <div></div>
+                  <div class="m3-cap2" style="font-size:0.58rem; white-space:nowrap;">Fine App. Deformation Nodes</div>
+                </div>
+                </div>
+              </div>
+              <div class="m3-main-gap" style="flex:1.2 1 0"></div>
+            </div>
+            <div class="m3c m3c-side">
+              <div class="m3-title">Occlusion-aware Appearance Loss</div>
+              <div class="rc-tworow">
+                <div class="rc-substk">
+                  <div class="rc-dstack">
+                    <img class="rc-dframe" src="./static/methodology/occ_mask_0.png" alt="">
+                    <img class="rc-dframe" src="./static/methodology/occ_mask_1.png" alt="">
+                    <img class="rc-dframe" src="./static/methodology/occ_mask_2.png" alt="">
+                  </div>
+                  <div class="rc-stklbl">Inpainting</div>
+                </div>
+                <div class="rc-arrow">&larr;</div>
+                <div class="rc-substk">
+                  <div class="rc-dstack">
+                    <img class="rc-dframe" src="./static/methodology/recon_0.png" alt="">
+                    <img class="rc-dframe" src="./static/methodology/recon_1.png" alt="">
+                    <img class="rc-dframe" src="./static/methodology/recon_2.png" alt="">
+                  </div>
+                  <div class="rc-stklbl">Scene Depth / Per-frame 3D</div>
+                </div>
+              </div>
+              <div class="rc-xa">
+                <span class="rc-xline"></span><span class="rc-xtop"></span><span class="rc-xbot"></span><span class="rc-xhead"></span>
+                <div class="rc-stack"><img class="vs-frame" src="./static/methodology/occ_ref_0.png" alt=""><img class="vs-frame" src="./static/methodology/occ_ref_1.png" alt=""><img class="vs-frame" src="./static/methodology/occ_ref_2.png" alt=""></div>
+                <div class="m3-cap2">Occlusion-inpainted Frames</div>
+                <div class="m3-grid2 m3-noisy"><img src="./static/methodology/noisy_render_0.png" alt=""><img src="./static/methodology/noisy_render_1.png" alt=""><img src="./static/methodology/noisy_render_2.png" alt=""><img src="./static/methodology/noisy_render_3.png" alt=""></div>
+                <div class="m3-cap2">Noisy Deformed 3DGS Renders</div>
+                <div class="m3-down">&darr;</div>
+                <div class="rc-priorbox"><svg class="rc-prior-fr" viewBox="0 0 69.8 45.9" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#7a5cff" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"><g fill="#9b86e0" stroke="none"><ellipse cx="36.18" cy="32.19" rx="9.45" ry="5.25"/><ellipse cx="41.58" cy="30.24" rx="4.50" ry="3.60"/><ellipse cx="26.88" cy="32.94" rx="4.05" ry="3.30"/><polygon points="23.88,30.54 22.38,25.74 26.43,29.79"/><polygon points="29.88,29.34 30.78,26.64 31.98,29.49"/><polygon points="45.03,30.84 47.58,34.44 45.63,32.04"/><rect x="29.28" y="36.24" width="2.40" height="4.65" rx="0.6"/><rect x="33.18" y="36.24" width="2.40" height="4.65" rx="0.6"/><rect x="37.68" y="36.24" width="2.40" height="4.65" rx="0.6"/><rect x="40.98" y="36.24" width="2.40" height="4.65" rx="0.6"/></g><polygon points="53.97,30.88 53.97,33.38 53.13,28.36 53.13,25.87" fill="#ece6ff"/><line x1="64.75" y1="27.96" x2="53.97" y2="30.88"/><line x1="64.75" y1="27.96" x2="53.97" y2="33.38"/><line x1="64.75" y1="27.96" x2="53.13" y2="28.36"/><line x1="64.75" y1="27.96" x2="53.13" y2="25.87"/><circle cx="64.75" cy="27.96" r="1.2" fill="#7a5cff" stroke="none"/><polygon points="16.29,36.35 13.09,34.11 13.85,28.97 17.04,31.21" fill="#ece6ff"/><line x1="5.00" y1="32.67" x2="16.29" y2="36.35"/><line x1="5.00" y1="32.67" x2="13.09" y2="34.11"/><line x1="5.00" y1="32.67" x2="13.85" y2="28.97"/><line x1="5.00" y1="32.67" x2="17.04" y2="31.21"/><circle cx="5.00" cy="32.67" r="1.2" fill="#7a5cff" stroke="none"/><polygon points="38.23,15.88 31.13,16.45 29.93,13.79 37.04,13.23" fill="#ece6ff"/><line x1="34.53" y1="5.00" x2="38.23" y2="15.88"/><line x1="34.53" y1="5.00" x2="31.13" y2="16.45"/><line x1="34.53" y1="5.00" x2="29.93" y2="13.79"/><line x1="34.53" y1="5.00" x2="37.04" y2="13.23"/><circle cx="34.53" cy="5.00" r="1.2" fill="#7a5cff" stroke="none"/></svg><div class="rc-prior-t1">Novel-view Diffusion Prior</div></div>
+              </div>
+              <div class="m3-down">&darr;</div>
+              <div class="m3-grid2 rc-denoised"><img src="./static/methodology/diffused_0.png" alt=""><img src="./static/methodology/diffused_1.png" alt=""><img src="./static/methodology/diffused_2.png" alt=""><img src="./static/methodology/diffused_3.png" alt=""></div>
+              <div class="m3-cap2" style="font-style:italic">Novel View Samples</div>
+              <div class="rc-plus">+</div>
+              <div class="rc-rloss"><span class="rc-rloss-par">(</span><img src="./static/methodology/rloss_render.png" alt=""><span class="rc-rloss-op">&minus;</span><img src="./static/methodology/rloss_input.png" alt=""><span class="rc-rloss-par">)</span></div>
+              <div class="m3-cap2" style="font-style:italic">Rendering Supervision</div>
+            </div>
+            <svg class="m3-loss" viewBox="0 0 1040 706" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><!-- L_rec: double-headed elbow between the deformation-reconstruction column and the Deformation Nodes video --><polyline points="353,648 441,648 441,616" fill="none" stroke="#3b6fd6" stroke-width="3" stroke-linecap="butt" stroke-linejoin="round" vector-effect="non-scaling-stroke"/><polygon points="441,600 433,616 449,616" fill="#3b6fd6"/><polygon points="337,648 353,640 353,656" fill="#3b6fd6"/><!-- L_app: mirror of L_rec — double-headed elbow into the Fine App. Deformation Nodes video --><polyline points="688,648 600,648 600,616" fill="none" stroke="#7a5cff" stroke-width="3" stroke-linecap="butt" stroke-linejoin="round" vector-effect="non-scaling-stroke"/><polygon points="600,600 592,616 608,616" fill="#7a5cff"/><polygon points="704,648 688,640 688,656" fill="#7a5cff"/></svg>
+            <img class="m3-loss-lbl ll-rec" src="./static/methodology/eq_lrec.png" alt="L_rec">
+            <img class="m3-loss-lbl ll-app" src="./static/methodology/eq_lapp.png" alt="L_app">
+          </div>
+        </div><!-- /.lift4d-method3 -->
+
+        <p class="content has-text-justified" style="margin-top: 1.1rem;">
+          From a monocular input video, an image-to-3D DiT produces a temporally consistent per-frame 3D reconstruction through <b>causal latent propagation</b>, where each frame&rsquo;s 3D latent is initialized by mixing fresh noise with the previous denoised latent, and the outputs are decoded into independent sets of Gaussian splats. We consolidate these per-frame predicted sets into a <b>single 4D complete Gaussian Splat reconstruction</b>, represented by <b>canonical Gaussians animated by two sets of sparse deformation nodes</b>. The first set is fit to the per-frame outputs through a reconstruction loss (&#8466;<sub>rec</sub>) on the per-frame reconstructed geometry, and the appearance is then refined by optimizing the color as well as a second set of <b>fine appearance deformation nodes</b> against <b>occlusion-inpainted frames</b> and rendering loss: the 4D reconstruction is rendered from random novel views and noised, and a novel-view diffusion prior denoises them, conditioned on the per-frame frames that have their occlusions inpainted using the per-frame 3D outputs. The resulting denoised novel-view sample distillation together with a rendering loss on the visible pixels supply an appearance supervision signal (&#8466;<sub>app</sub>) that <b>aggregates visible details across frames and hallucinates in occluded and unobserved regions</b>.
+        </p>
+
+        <style>
+          .lift4d-method3 { max-width: 1040px; margin: 0.6rem auto 0; }
+          .lift4d-method3 .m3g { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.7rem; align-items: stretch; position: relative; }
+          .lift4d-method3 .m3-loss { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; overflow: visible; }
+          .lift4d-method3 .m3-loss-lbl { position: absolute; transform: translate(-50%, -50%); z-index: 5; pointer-events: none; display: block; }
+          .lift4d-method3 .ll-rec { left: 38.4%; top: 89%; width: 56px; }
+          .lift4d-method3 .ll-app { left: 61.7%; top: 89%; width: 62px; }
+          .lift4d-method3 .m3c { display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 0.6rem 0.45rem; border-radius: 12px; }
+          .lift4d-method3 .m3c-side { background: #f7f9fc; border: 1px solid #e6ecf5; }
+          .lift4d-method3 .m3c-main { background: transparent; border: none; box-shadow: none; justify-content: flex-start; gap: 0.1rem; }
+          .lift4d-method3 .m3-main-top, .lift4d-method3 .m3-main-bot { display: flex; flex-direction: column; align-items: center; width: 100%; }
+          .lift4d-method3 .m3-main-top { margin-top: 1rem; }   /* nudge input video down so the branch arrows center on it */
+          .lift4d-method3 .m3-fineblock { display: flex; flex-direction: column; align-items: center; width: 100%; box-sizing: border-box; border: 1.6px solid #b4bcc8; background: #f1f2f4; border-radius: 12px; padding: 10px 10px 12px; margin-top: 0.35rem; }
+          .lift4d-method3 .m3-upacc { display: block; width: 20px; height: auto; margin: 3px auto; }
+          .lift4d-method3 .m3-subrow { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); grid-template-rows: auto auto; column-gap: 7px; row-gap: 2px; width: 100%; margin-top: 0.55rem; align-items: center; }
+          .lift4d-method3 .m3-plus { justify-self: center; align-self: center; font-size: 1.15rem; font-weight: 800; color: #5b6a82; line-height: 1; }
+          .lift4d-method3 .m3-subcol { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+          .lift4d-method3 .rc-darow { display: flex; align-items: stretch; justify-content: center; gap: 0; margin: 0.15rem auto 0; }
+          .lift4d-method3 .rc-dabox { display: flex; flex-direction: column; align-items: center; gap: 5px; background: #f1f6fd; border: 1.6px solid #3b6fd6; border-radius: 12px 0 0 12px; padding: 8px 10px 6px; margin: 0; width: fit-content; max-width: 216px; }
+          .lift4d-method3 .rc-reconext { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; box-sizing: border-box; padding: 8px 12px; border: 1.6px dashed #3b6fd6; border-left: none; border-radius: 0 12px 12px 0; background: #fafbff; }
+          .lift4d-method3 .rc-tworow { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 0.15rem auto 0.4rem; border: 1.6px dashed #3b6fd6; border-radius: 12px; background: #fafbff; padding: 8px 10px; box-sizing: border-box; }
+          .lift4d-method3 .rc-tworow .rc-dstack { width: 112px; height: 72px; }
+          .lift4d-method3 .rc-tworow .rc-dframe { width: 88px; }
+          .lift4d-method3 .rc-tworow .rc-dframe:nth-child(2) { right: 11px; top: 10px; }
+          .lift4d-method3 .rc-tworow .rc-dframe:nth-child(3) { right: 22px; top: 20px; }
+          .lift4d-method3 .rc-substk { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+          .lift4d-method3 .rc-stklbl { font-size: 0.45rem; font-weight: 600; color: #5b6a82; text-align: center; line-height: 1.2; white-space: nowrap; }
+          .lift4d-method3 .rc-arrow { align-self: flex-start; margin-top: 26px; font-size: 1.35rem; font-weight: 800; color: #3b6fd6; line-height: 1; }
+          .lift4d-method3 .rc-reconlabel { font-size: 0.5rem; font-weight: 600; color: #5b6a82; text-align: center; line-height: 1.2; max-width: 100px; }
+          .lift4d-method3 .rc-reconstack { position: relative; width: 96px; height: 64px; flex: 0 0 auto; }
+          .lift4d-method3 .rc-rframe { position: absolute; width: 74px; border-radius: 4px; border: 1.5px solid #fff; box-shadow: 0 3px 11px rgba(50,75,130,0.22); background: #fff; display: block; }
+          .lift4d-method3 .rc-rframe:nth-child(1) { right: 0; top: 0; z-index: 3; }
+          .lift4d-method3 .rc-rframe:nth-child(2) { right: 11px; top: 10px; z-index: 2; }
+          .lift4d-method3 .rc-rframe:nth-child(3) { right: 22px; top: 20px; z-index: 1; }
+          .lift4d-method3 .rc-dalabel { font-size: 0.62rem; font-weight: 800; color: #2f5bb0; letter-spacing: 0.3px; }
+          .lift4d-method3 .rc-depthrow { display: flex; align-items: center; justify-content: center; gap: 5px; }
+          .lift4d-method3 .rc-dstack { position: relative; width: 126px; height: 78px; flex: 0 0 auto; }
+          .lift4d-method3 .rc-dframe { position: absolute; width: 100px; border-radius: 4px; border: 1.5px solid #fff; box-shadow: 0 3px 11px rgba(50,75,130,0.22); background: #fff; display: block; }
+          .lift4d-method3 .rc-dframe:nth-child(1) { right: 0; top: 0; z-index: 3; }
+          .lift4d-method3 .rc-dframe:nth-child(2) { right: 13px; top: 11px; z-index: 2; }
+          .lift4d-method3 .rc-dframe:nth-child(3) { right: 26px; top: 22px; z-index: 1; }
+          .lift4d-method3 .rc-frustums { width: 48px; height: auto; flex: 0 0 auto; transform: scaleX(-1); }
+          .lift4d-method3 .m3-title { font-size: 0.95rem; font-weight: 800; color: #2f3e57; text-align: center;
+            margin: 0.1rem 0 0.5rem; letter-spacing: 0.2px; flex: 0 0 auto; }
+          .lift4d-method3 .m3-vid { width: 100%; max-width: 280px; border-radius: 9px; display: block; background: #fff; box-shadow: 0 3px 14px rgba(50,75,130,0.13); }
+          .lift4d-method3 .m3-cap2 { font-size: 0.74rem; color: #5b6a82; margin: 0.28rem 0 0; text-align: center; line-height: 1.25; }
+          .lift4d-method3 .m3-down { font-size: 1.25rem; color: #9aa7bd; line-height: 1; margin: 0.18rem 0; }
+          .lift4d-method3 .m3-denoise { display: flex; align-items: stretch; gap: 4px; width: 100%; }
+          .lift4d-method3 .dn-vid { position: relative; flex: 0 0 120px; }
+          .lift4d-method3 .dn-vid .seqvid { width: 120px; height: auto; display: block; border-radius: 8px; background: #fff; box-shadow: 0 2px 10px rgba(50,75,130,0.1); }
+          .lift4d-method3 .dn-vid .seqov { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+          .lift4d-method3 .seqov [id^="sq-"] { transition: opacity 0.45s ease; }
+          .lift4d-method3 .dn-eqs { position: relative; flex: 1 1 auto; min-width: 0; }
+          .lift4d-method3 .dn-step { position: absolute; left: 50%; transform: translate(-50%, -50%); width: 152px;
+            background: #eef3fd; border: 1px solid #a9c5ec; border-radius: 8px; box-shadow: 0 1px 6px rgba(50,75,130,0.13);
+            transition: opacity 0.4s ease; }
+          .lift4d-method3 .dn-step.r0 { top: 15.4%; } .lift4d-method3 .dn-step.r1 { top: 50%; } .lift4d-method3 .dn-step.r2 { top: 84.6%; }
+          .lift4d-method3 .dn-step-hd { display: flex; align-items: center; justify-content: center; gap: 4px;
+            font-size: 0.5rem; font-weight: 700; color: #2f5bb0; text-align: center; padding: 4px 0 2px; letter-spacing: 0.3px; }
+          .lift4d-method3 .dn-spin { width: 9px; height: 9px; flex: 0 0 auto; transform-origin: 50% 50%; animation: dn-rot 3s linear infinite; }
+          @keyframes dn-rot { to { transform: rotate(360deg); } }
+          .lift4d-method3 .dn-step-eq { position: relative; height: 56px; }
+          .lift4d-method3 .dn-step-eq .dn-eq { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+            height: 17px; width: auto; max-width: 92%; opacity: 0; transition: opacity 0.4s ease; }
+          .lift4d-method3 .m3-gsdec2 svg, .lift4d-method3 .m3-difbox svg { width: 150px; height: auto; display: block; }
+          .lift4d-method3 .m3-gsdec2, .lift4d-method3 .m3-difbox { margin: 0; }
+          .lift4d-method3 .m3-flow { display: flex; flex-direction: column; align-items: center; gap: 0.1rem; color: #8a7bc0;
+            font-size: 0.72rem; font-weight: 600; margin: 0.4rem 0; }
+          .lift4d-method3 .m3-flow .fl-ar { font-size: 1.5rem; line-height: 1; color: #b9a6ec; }
+          .lift4d-method3 .m3-down-big { font-size: 2rem; color: #9aa7bd; margin: 0.5rem 0; }
+          .lift4d-method3 .m3-down-spacer { height: 1.4rem; flex: 0 0 auto; }
+          .lift4d-method3 .m3-branch { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; overflow: visible; }
+          .lift4d-method3 .m3-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; width: 100%; }
+          .lift4d-method3 .m3-grid2 img { width: 100%; border-radius: 6px; border: 1.5px solid #fff; display: block;
+            box-shadow: 0 2px 9px rgba(50,75,130,0.18); background:#fff; }
+          .lift4d-method3 .m3-noisy img { border: 1.5px solid #e7defb; }
+          .lift4d-method3 .m3c-side > .rc-denoised { max-width: 184px; margin: 0 auto; }
+          .lift4d-method3 .rc-plus { font-size: 1.45rem; font-weight: 800; color: #7a5cff; line-height: 1; margin: 0.28rem 0; }
+          .lift4d-method3 .rc-rloss { display: flex; align-items: center; justify-content: center; gap: 4px;
+            width: 100%; max-width: 200px; margin: 0 auto; }
+          .lift4d-method3 .rc-rloss img { height: 36px; width: auto; border-radius: 5px; border: 1.5px solid #fff;
+            box-shadow: 0 2px 8px rgba(50,75,130,0.16); background: #fff; }
+          .lift4d-method3 .rc-rloss-op { font-size: 1.0rem; font-weight: 700; color: #5b6a82; }
+          .lift4d-method3 .rc-rloss-par { font-size: 2.4rem; font-weight: 400; color: #5b6a82; line-height: 0; }
+          /* right column: I_full deck -> noisy renders -> view prior; everything centered, cross-attn arrow on the RIGHT */
+          .lift4d-method3 .rc-xa { position: relative; display: flex; flex-direction: column; align-items: center;
+            width: 100%; max-width: 212px; margin: 0 auto; }
+          .lift4d-method3 .rc-xa .m3-grid2 { max-width: 184px; }
+          .lift4d-method3 .rc-stack { position: relative; width: 182px; height: 116px; margin-bottom: 2px; }
+          .lift4d-method3 .rc-stack .vs-frame { position: absolute; width: 150px; border-radius: 5px; border: 1.5px solid #fff;
+            box-shadow: 0 3px 11px rgba(50,75,130,0.22); background: #fff; display: block; }
+          .lift4d-method3 .rc-stack .vs-frame:nth-child(1) { right: 0; top: 0; z-index: 3; }
+          .lift4d-method3 .rc-stack .vs-frame:nth-child(2) { right: 16px; top: 15px; z-index: 2; }
+          .lift4d-method3 .rc-stack .vs-frame:nth-child(3) { right: 32px; top: 30px; z-index: 1; }
+          .lift4d-method3 .rc-priorbox { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+            width: 184px; height: 90px; background: #f5f0ff; border: 1.6px solid #7a5cff; border-radius: 14px; padding: 7px 8px; }
+          .lift4d-method3 .rc-prior-fr { width: 60px; height: auto; display: block; }
+          .lift4d-method3 .rc-prior-t1 { font-size: 0.82rem; font-weight: 700; color: #4a3b80; text-align: center; line-height: 1.15; }
+          /* cross-attn arrow points at the vertical CENTER of the 90px prior box (45px above its base) */
+          .lift4d-method3 .rc-xline { position: absolute; right: 3px; top: 54px; bottom: 45px; border-right: 2px dashed #9b86e0; }
+          .lift4d-method3 .rc-xtop { position: absolute; right: 3px; top: 53px; width: 12px; border-top: 2px dashed #9b86e0; }
+          .lift4d-method3 .rc-xbot { position: absolute; right: 3px; bottom: 44px; width: 20px; border-top: 2px solid #7a5cff; }
+          .lift4d-method3 .rc-xhead { position: absolute; right: 23px; bottom: 40px; width: 0; height: 0;
+            border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-right: 8px solid #7a5cff; }
+          @media (max-width: 820px) {
+            .lift4d-method3 .m3g { grid-template-columns: 1fr; }
+            /* cross-column overlay arrows are meaningless once the columns stack */
+            .lift4d-method3 .m3-loss, .lift4d-method3 .m3-loss-lbl, .lift4d-method3 .m3-branch { display: none; }
+            /* Depth Anything box + its dashed extension: the one row wide enough to overflow a
+               phone, so stack it vertically (shared edge becomes horizontal) instead of side-by-side */
+            .lift4d-method3 .rc-darow { flex-direction: column; }
+            .lift4d-method3 .rc-dabox { border-radius: 12px 12px 0 0; }
+            .lift4d-method3 .rc-reconext { border: 1.6px dashed #3b6fd6; border-top: none; border-radius: 0 0 12px 12px; }
+            /* Inpainting + Deformation Reconstruction Output stacks: side-by-side on desktop,
+               stacked vertically on phones so they never overflow a narrow column */
+            .lift4d-method3 .rc-tworow { flex-direction: column; align-items: center; gap: 8px; }
+            .lift4d-method3 .rc-arrow { align-self: center; margin-top: 0; transform: rotate(90deg); }
+            /* keep the causal-sequence panel within narrow phones */
+            .lift4d-method3 .dn-vid { flex: 0 0 100px; }
+            .lift4d-method3 .dn-vid .seqvid { width: 100px; }
+          }
+        </style>
+
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== COMPARISONS ===================== -->
+<section class="section contribution-section">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 contribution-title">Comparisons</h2>
+    <div class="content has-text-justified">
+      <p>
+        <span class="lift4d">Lift4D</span> outperforms prior 4D reconstruction baselines on
+        both synthetic and in-the-wild footage, delivering complete temporally coherent geometry,
+        sharper appearance, and more accurate motion even under heavy occlusion.
+      </p>
+    </div>
+    <div class="columns is-centered">
+      <div class="column is-full">
+        <video class="cmp-video" autoplay muted loop playsinline
+               style="width:100%; border-radius:10px; box-shadow:0 4px 22px rgba(50,75,130,0.14);">
+          <source src="./static/videos/cmp_l4gm_all8.mp4" type="video/mp4">
+        </video>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== BIBTEX ===================== -->
+<section class="section" id="BibTeX">
+  <div class="container is-max-desktop content">
+    <h2 class="title">BibTeX</h2>
+<pre><code>@article{litman2026lift4d,
+  author  = {Litman, Yehonathan and Ma, Xiaoxuan and Shah, Manan and Ugrinovic, Nicol\'{a}s and Kitani, Kris and De la Torre, Fernando and Tulsiani, Shubham},
+  title   = {Lift4D: Harmonizing Single-View 3D Estimation for 4D Reconstruction In-the-Wild},
+  journal = {arXiv},
+  year    = {2026},
+}</code></pre>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content">
+          <p>
+            Website template adapted from
+            <a href="https://github.com/nerfies/nerfies.github.io">Nerfies</a>,
+            licensed under a
+            <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
+              Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+
+<script>
+(function(){
+  var v=document.getElementById("seqvid"); if(!v) return;
+  v.playbackRate = 0.714;   // 1.6x slower (currentTime-driven annotations slow with it)
+  v.addEventListener("loadeddata", function(){ v.playbackRate = 0.714; });
+  var RNG=[["eq-z00",0,1.5],["eq-z01",1.5,99],["eq-z1mix",2.33,3.83],["eq-z11",3.83,99],["eq-z2mix",4.67,6.17],["eq-z21",6.17,99],["sq-a1",2.33,99],["sq-a2",4.67,99],["dn-b1",2.2,99],["dn-b2",4.55,99]];
+  function upd(){var t=v.currentTime||0;for(var i=0;i<RNG.length;i++){var e=document.getElementById(RNG[i][0]);if(e)e.style.opacity=(t>=RNG[i][1]&&t<RNG[i][2])?"1":"0";}requestAnimationFrame(upd);}
+  requestAnimationFrame(upd);
+})();
+</script>
+
+<script>
+// Greedy teaser-first loading: eagerly buffer the teaser video, and hold back the
+// gallery viewer (iframe + scene params) plus every below-the-fold <video> until the
+// teaser is playing (or a short fallback) so nothing competes for bandwidth up front.
+// Deferred videos then load lazily as they scroll near the viewport.
+(function () {
+  var teaser = document.getElementById('teaser-wide');
+  var iframe = document.getElementById('lift4d-gallery-iframe');
+
+  var deferred = [];
+  document.querySelectorAll('video').forEach(function (v) {
+    if (v.id === 'teaser-wide' || v.hasAttribute('data-no-defer')) return;
+    var s = v.querySelector('source');
+    if (s && s.getAttribute('src')) { s.setAttribute('data-src', s.getAttribute('src')); s.removeAttribute('src'); }
+    if (v.hasAttribute('autoplay')) { v.removeAttribute('autoplay'); v.dataset.autoplay = '1'; }
+    v.preload = 'none';
+    v.load();   // drop any fetch already kicked off by autoplay/preload
+    deferred.push(v);
+  });
+
+  function reveal(v) {
+    var s = v.querySelector('source');
+    if (s && s.getAttribute('data-src') && !s.getAttribute('src')) {
+      s.setAttribute('src', s.getAttribute('data-src')); v.load();
+      if (v.dataset.autoplay) v.play().catch(function () {});
+    }
+  }
+  var io = ('IntersectionObserver' in window)
+    ? new IntersectionObserver(function (es) {
+        es.forEach(function (e) { if (e.isIntersecting) { reveal(e.target); io.unobserve(e.target); } });
+      }, { rootMargin: '300px' })
+    : null;
+
+  function releaseRest() {
+    if (iframe && window.__lift4dGallerySrc && !iframe.getAttribute('src')) iframe.src = window.__lift4dGallerySrc;
+    if (window.__lift4dStartGallery) window.__lift4dStartGallery();   // start the corner input video
+    deferred.forEach(function (v) { if (io) io.observe(v); else reveal(v); });
+  }
+
+  if (!teaser) { releaseRest(); return; }
+  teaser.preload = 'auto';
+  var fired = false, go = function () { if (!fired) { fired = true; releaseRest(); } };
+  if (teaser.readyState >= 2) go();                       // already has data
+  else {
+    teaser.addEventListener('loadeddata', go);            // teaser is playable -> load the rest
+    teaser.addEventListener('canplaythrough', go);
+    setTimeout(go, 4000);                                 // fallback if the teaser stalls
+  }
+})();
+</script>
+</body>
+</html>
